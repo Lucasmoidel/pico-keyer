@@ -61,6 +61,7 @@ target_link_libraries(pico-keyer
         hardware_i2c
         hardware_pio
         hardware_timer
+        hardware_pwm
         )
 
 pico_add_extra_outputs(pico-keyer)

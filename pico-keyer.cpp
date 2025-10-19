@@ -31,8 +31,12 @@ int main()
 
     gpio_set_function(0, GPIO_FUNC_UART);
     gpio_set_function(1, GPIO_FUNC_UART);
-    
 
+    gpio_init(16);
+    gpio_set_dir(16, GPIO_OUT);
+
+    // Turn the LED on (set pin to HIGH)
+    
     const uint dit = 14;
     const uint dah = 15;
     gpio_init(dit);
@@ -54,6 +58,10 @@ int main()
         }
         if (dah_state) {
             uart_puts(uart0, "dah\n");
+            gpio_put(16, 1); 
+        }
+        if(!dah_state){
+            gpio_put(16, 0); 
         }
         sleep_ms(100); // Small delay
     }
