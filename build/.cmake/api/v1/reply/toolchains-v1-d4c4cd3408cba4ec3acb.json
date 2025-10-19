@@ -1,0 +1,108 @@
+{
+	"kind" : "toolchains",
+	"toolchains" : 
+	[
+		{
+			"compiler" : 
+			{
+				"id" : "GNU",
+				"implicit" : {},
+				"path" : "/home/lucas/.pico-sdk/toolchain/14_2_Rel1/bin/arm-none-eabi-gcc",
+				"version" : ""
+			},
+			"language" : "ASM",
+			"sourceFileExtensions" : 
+			[
+				"s",
+				"S",
+				"asm"
+			]
+		},
+		{
+			"compiler" : 
+			{
+				"id" : "GNU",
+				"implicit" : 
+				{
+					"includeDirectories" : 
+					[
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc/arm-none-eabi/14.2.1/include",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc/arm-none-eabi/14.2.1/include-fixed",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/arm-none-eabi/include"
+					],
+					"linkDirectories" : 
+					[
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc/arm-none-eabi/14.2.1/thumb/v6-m/nofp",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/arm-none-eabi/lib/thumb/v6-m/nofp",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc/arm-none-eabi/14.2.1",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/arm-none-eabi/lib"
+					],
+					"linkFrameworkDirectories" : [],
+					"linkLibraries" : []
+				},
+				"path" : "/home/lucas/.pico-sdk/toolchain/14_2_Rel1/bin/arm-none-eabi-gcc",
+				"version" : "14.2.1"
+			},
+			"language" : "C",
+			"sourceFileExtensions" : 
+			[
+				"c",
+				"m"
+			]
+		},
+		{
+			"compiler" : 
+			{
+				"id" : "GNU",
+				"implicit" : 
+				{
+					"includeDirectories" : 
+					[
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/arm-none-eabi/include/c++/14.2.1",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/arm-none-eabi/include/c++/14.2.1/arm-none-eabi/thumb/v6-m/nofp",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/arm-none-eabi/include/c++/14.2.1/backward",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc/arm-none-eabi/14.2.1/include",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc/arm-none-eabi/14.2.1/include-fixed",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/arm-none-eabi/include"
+					],
+					"linkDirectories" : 
+					[
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc/arm-none-eabi/14.2.1/thumb/v6-m/nofp",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/arm-none-eabi/lib/thumb/v6-m/nofp",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc/arm-none-eabi/14.2.1",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/lib/gcc",
+						"/home/lucas/.pico-sdk/toolchain/14_2_Rel1/arm-none-eabi/lib"
+					],
+					"linkFrameworkDirectories" : [],
+					"linkLibraries" : []
+				},
+				"path" : "/home/lucas/.pico-sdk/toolchain/14_2_Rel1/bin/arm-none-eabi-g++",
+				"version" : "14.2.1"
+			},
+			"language" : "CXX",
+			"sourceFileExtensions" : 
+			[
+				"C",
+				"M",
+				"c++",
+				"cc",
+				"cpp",
+				"cxx",
+				"mm",
+				"mpp",
+				"CPP",
+				"ixx",
+				"cppm",
+				"ccm",
+				"cxxm",
+				"c++m"
+			]
+		}
+	],
+	"version" : 
+	{
+		"major" : 1,
+		"minor" : 0
+	}
+}
