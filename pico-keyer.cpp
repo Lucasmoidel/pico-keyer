@@ -13,14 +13,24 @@
 #define I2C_SDA 8
 #define I2C_SCL 9
 
-int64_t turnOff(alarm_id_t id, void *user_data) {
-    gpio_put(16, 0); 
-    bool *flag_ptr = (bool *)user_data;
-    *flag_ptr = false;
-    uart_puts(uart0, "????\n");
-    busy_wait_ms(400);
+bool on;
+bool canstart;
+
+int64_t coolDown(alarm_id_t id, void *user_data) {
+
+    canstart = true;
     return 0;
 }
+
+int64_t turnOff(alarm_id_t id, void *user_data) {
+    gpio_put(16, 0); 
+    on=false;
+    add_alarm_in_ms(400, *coolDown, NULL, false);
+    return 0;
+}
+
+
+
 int main()
 {
     stdio_init_all();
@@ -54,29 +64,30 @@ int main()
     gpio_set_pulls(dah, false, true);
     bool dit_state = gpio_get(dit);
     bool dah_state = gpio_get(dah);
-    bool on = false;
+    on = false;
+    canstart = true;
     while (true){
         // Read the state of the input pin
         dit_state = gpio_get(dit);
         dah_state = gpio_get(dah);
 
         if (dit_state && !dah_state) {
-            uart_puts(uart0, "dit\n");
-            if(!on){
+            if(!on && canstart){
                 on=true;
+                canstart = false;
                 gpio_put(16, 1);
-                add_alarm_in_ms(200, *turnOff, &on, false);
+                add_alarm_in_ms(200, *turnOff, NULL, false);
             }
         }
         if (dah_state && !dit_state) {
-            uart_puts(uart0, "dah\n");
             gpio_put(16, 1); 
         }
 
         if(!dit_state && !dah_state){
             gpio_put(16, 0); 
             on=false;
+            canstart=true;
         }
-        sleep_ms(100); // Small delay
+        //sleep_ms(10); // Small delay
     }
 }
