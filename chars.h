@@ -2,6 +2,10 @@
 #include <string>
 const uint dit = 1;
 const uint dah = 0;
+const uint gap = 2;
+const uint space = 3;
+const uint end = 4;
+std::string sp = " ";
 std::vector<std::vector<int>> chars = {
     {dit, dah}, //A
     {dah, dit, dit, dit}, //B
