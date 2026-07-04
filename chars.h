@@ -5,6 +5,10 @@ const uint dah = 0;
 const uint gap = 2;
 const uint space = 3;
 const uint end = 4;
+
+int pwm_pin = 18;
+int recordPin = 11;
+int playPin = 7;
 std::string sp = " ";
 std::vector<std::vector<int>> chars = {
     {dit, dah}, //A
