@@ -37,6 +37,7 @@ std::vector<int> elements;
 uint32_t lastchar = 0;
 bool recordMode = false;
 std::vector<int> recordArr;
+bool hasSpace = true;
 
 std::string decodeChar(std::vector<int> elements){
     std::stringstream stream;
@@ -85,6 +86,7 @@ int64_t turnOff(alarm_id_t id, void *user_data) {
 void doDit(){
     key(true);
     add_alarm_in_ms(basetime, *turnOff, (void*) &dit, false);
+    hasSpace = false;
     curent = dit;
     last = dit;
 }
@@ -92,6 +94,7 @@ void doDit(){
 void doDah(){
     key(true);
     add_alarm_in_ms(basetime*3, *turnOff, (void*) &dah, false);
+    hasSpace = false;
     curent = dah;
     last = dah;
 
@@ -210,12 +213,18 @@ int main()
 
             elements.clear();
         }
+        if (to_ms_since_boot(get_absolute_time())-lastchar > basetime*7 && !hasSpace && curent == -1){
+            uart_puts(uart0, " ");
+            hasSpace = true;
+
+        }
         if(!gpio_get(playPin)){
             contents = (const uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET);
 
             
             for(int i = 0; i < FLASH_PAGE_SIZE;i++){
                 if (contents[i] == end){
+                    hasSpace = false;
                     break;
                 } else if(contents[i] == dit){
                     key(true);
