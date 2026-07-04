@@ -58,7 +58,7 @@ std::string decodeChar(std::vector<int> elements){
         }
         match = true;
     }
-    return "";
+    return "_";
 }
 
 void key(bool x){
@@ -125,7 +125,9 @@ int main()
         }
 
     }
+    write_buf[z] = space;
     write_buf[z] = end;
+
 
     uint32_t saved_interrupts = save_and_disable_interrupts();
     flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
@@ -214,8 +216,6 @@ int main()
             
             for(int i = 0; i < FLASH_PAGE_SIZE;i++){
                 if (contents[i] == end){
-                    uart_puts(uart0, " ");
-                    sleep_ms(basetime*7);
                     break;
                 } else if(contents[i] == dit){
                     key(true);
@@ -234,6 +234,8 @@ int main()
                     elements.clear();
                     sleep_ms(basetime*3);
                 } else if(contents[i] == space){
+                    uart_puts(uart0, decodeChar(elements).c_str());
+                    elements.clear();
                     uart_puts(uart0, " ");
                     sleep_ms(basetime*7);
                 }
