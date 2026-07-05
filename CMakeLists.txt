@@ -15,19 +15,18 @@ if(WIN32)
 else()
     set(USERHOME $ENV{HOME})
 endif()
-set(sdkVersion 2.2.0)
-set(toolchainVersion 14_2_Rel1)
-set(picotoolVersion 2.2.0-a4)
+set(sdkVersion 2.3.0)
+set(toolchainVersion 15_2_Rel1)
+set(picotoolVersion 2.3.0)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+set(PICO_BOARD pico CACHE STRING "Board type")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
-
 project(pico-keyer C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
@@ -35,7 +34,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(pico-keyer main.cpp )
+add_executable(pico-keyer main.cpp usb_descriptors.c)
 
 pico_set_program_name(pico-keyer "pico-keyer")
 pico_set_program_version(pico-keyer "0.1")
@@ -62,7 +61,9 @@ target_link_libraries(pico-keyer
         hardware_timer
         hardware_pwm
         hardware_flash
+        pico_unique_id
+        tinyusb_board
+        tinyusb_device
         )
 
 pico_add_extra_outputs(pico-keyer)
-

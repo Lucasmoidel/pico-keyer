@@ -11,6 +11,11 @@
 #include "chars.h"
 #include "sstream"
 
+#include "bsp/board_api.h"
+#include "tusb.h"
+
+#include "usb_descriptors.h"
+
 // I2C defines
 // This example will use I2C0 on GPIO8 (SDA) and GPIO9 (SCL) running at 400KHz.
 // Pins can be changed, see the GPIO function select table in the datasheet for information on GPIO astreamignments
@@ -19,7 +24,9 @@
 #define I2C_SCL 9
 
 #define FLASH_TARGET_OFFSET (2 * 1024 * 1024 - FLASH_SECTOR_SIZE)
-const uint8_t *contents;
+const uint8_t* contents;
+uint32_t saved_interrupts;
+
 
 int dit_state;
 int dah_state;
@@ -29,8 +36,8 @@ int curent = -1;
 int next = -1;
 int speed = 22;
 int tone = 430;
-int level = ((125000000/125)/tone)/2;
-int basetime = 1200/speed;
+int level = ((125000000 / 125) / tone) / 2;
+int basetime = 1200 / speed;
 //std::stringstream ss;
 std::string str;
 std::vector<int> elements;
@@ -38,22 +45,25 @@ uint32_t lastchar = 0;
 bool recordMode = false;
 std::vector<int> recordArr;
 bool hasSpace = true;
+bool recordLock = false;
+bool lockout = false;
+void sendKey();
 
-std::string decodeChar(std::vector<int> elements){
+std::string decodeChar(std::vector<int> elements) {
     std::stringstream stream;
     bool match = true;
-    for(int i = 0; i < chars.size(); i++){
-        if(chars.at(i).size() == elements.size()){
-            for (int x = 0; x < elements.size(); x++){
-                if (elements.at(x) != chars.at(i).at(x)){
+    for (int i = 0; i < chars.size(); i++) {
+        if (chars.at(i).size() == elements.size()) {
+            for (int x = 0; x < elements.size(); x++) {
+                if (elements.at(x) != chars.at(i).at(x)) {
                     match = false;
                     break;
                 }
             }
-        }   else{
+        } else {
             match = false;
         }
-        if (match){
+        if (match) {
             stream << strs.at(i);
             return stream.str();
         }
@@ -62,84 +72,111 @@ std::string decodeChar(std::vector<int> elements){
     return "_";
 }
 
-void key(bool x){
-    if (x){
+int64_t sendKeyCB(alarm_id_t id, void* user_data) {
+    sendKey();
+    return 0;
+}
+
+void sendKey() {
+    // skip if hid is not ready yet
+    if (!tud_hid_ready()) {
+        add_alarm_in_ms(400, *sendKeyCB, NULL, false);
+        return;
+    }
+
+    uint8_t keycode[6] = { 0 };
+    for (int i = 0; i < 36; i++) {
+        if (strs.at(i) == str) {
+            keycode[0] = i + 4;
+        }
+
+    }
+    tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
+    tud_hid_keyboard_report(1, 0, NULL);
+
+    lockout = false;
+
+}
+
+void key(bool x) {
+    if (x) {
         pwm_set_gpio_level(pwm_pin, level);
-    } else{
+    } else {
         pwm_set_gpio_level(pwm_pin, 0);
     }
 }
 
-int64_t coolDown(alarm_id_t id, void *user_data) {
+int64_t coolDown(alarm_id_t id, void* user_data) {
     curent = -1;
     return 0;
 }
 
-int64_t turnOff(alarm_id_t id, void *user_data) {
+int64_t turnOff(alarm_id_t id, void* user_data) {
     key(false);
     add_alarm_in_ms(basetime, *coolDown, user_data, false);
     lastchar = to_ms_since_boot(get_absolute_time());
     elements.push_back(*((int*)user_data));
+    if (recordMode) {
+        recordArr.push_back(*((int*)user_data));
+    }
     return 0;
 }
 
-void doDit(){
+void doDit() {
     key(true);
-    add_alarm_in_ms(basetime, *turnOff, (void*) &dit, false);
+    add_alarm_in_ms(basetime, *turnOff, (void*)&dit, false);
     hasSpace = false;
     curent = dit;
     last = dit;
 }
 
-void doDah(){
+void doDah() {
     key(true);
-    add_alarm_in_ms(basetime*3, *turnOff, (void*) &dah, false);
+    add_alarm_in_ms(basetime * 3, *turnOff, (void*)&dah, false);
     hasSpace = false;
     curent = dah;
     last = dah;
-
 }
 
 int main()
 {
     stdio_init_all();
 
-    alignas(4) uint8_t write_buf[FLASH_PAGE_SIZE];
-    std::vector<uint8_t> thingarr;
-    std::string thingstr = "CQ POTA DE KO6LBA";
-    int z = 0;
-    for (int i = 0; i < thingstr.length(); i++){
-        if(z != 0 && (write_buf[z-1] == 0 || write_buf[z-1] == 1) && thingstr.substr(i, 1) != sp){
-            write_buf[z] = gap;
-            z++;
-        }
-        if(thingstr.substr(i, 1) == sp){
-                write_buf[z] = space;
-                z++;
-        } else {
-            for (int x = 0; x < strs.size(); x++){
-                if (thingstr.substr(i, 1) == strs.at(x)){
-                    for (int y = 0; y < chars.at(x).size(); y++){
-                        write_buf[z] = chars.at(x).at(y);
-                        z++;
-                    }
-                } 
-            } 
-        }
+    // alignas(4) uint8_t write_buf[FLASH_PAGE_SIZE];
+    // std::vector<uint8_t> thingarr;
+    // std::string thingstr = "CQ POTA DE KO6LBA";
+    // int z = 0;
+    // for (int i = 0; i < thingstr.length(); i++){
+    //     if(z != 0 && (write_buf[z-1] == 0 || write_buf[z-1] == 1) && thingstr.substr(i, 1) != sp){
+    //         write_buf[z] = gap;
+    //         z++;
+    //     }
+    //     if(thingstr.substr(i, 1) == sp){
+    //             write_buf[z] = space;
+    //             z++;
+    //     } else {
+    //         for (int x = 0; x < strs.size(); x++){
+    //             if (thingstr.substr(i, 1) == strs.at(x)){
+    //                 for (int y = 0; y < chars.at(x).size(); y++){
+    //                     write_buf[z] = chars.at(x).at(y);
+    //                     z++;
+    //                 }
+    //             } 
+    //         } 
+    //     }
 
-    }
-    write_buf[z] = space;
-    write_buf[z] = end;
+    // }
+    // write_buf[z] = space;
+    // write_buf[z] = end;
 
 
-    uint32_t saved_interrupts = save_and_disable_interrupts();
-    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-    restore_interrupts(saved_interrupts);
-    saved_interrupts = save_and_disable_interrupts();
-    flash_range_program(FLASH_TARGET_OFFSET, write_buf, FLASH_PAGE_SIZE);
-    restore_interrupts(saved_interrupts);
-
+    // saved_interrupts = save_and_disable_interrupts();
+    // flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+    // flash_range_program(FLASH_TARGET_OFFSET, write_buf, FLASH_PAGE_SIZE);
+    // restore_interrupts(saved_interrupts);
     uart_init(uart0, 115200);
+
+
 
     gpio_set_function(17, GPIO_FUNC_UART);
     gpio_set_function(16, GPIO_FUNC_UART);
@@ -147,12 +184,22 @@ int main()
     gpio_set_function(pwm_pin, GPIO_FUNC_PWM);
     uint slice_num = pwm_gpio_to_slice_num(pwm_pin);
     pwm_config config = pwm_get_default_config();
-    pwm_config_set_clkdiv_int_frac(&config, 125, 0); 
-    pwm_config_set_wrap(&config, (125000000/125)/tone); 
+    pwm_config_set_clkdiv_int_frac(&config, 125, 0);
+    pwm_config_set_wrap(&config, (125000000 / 125) / tone);
     pwm_init(slice_num, &config, true);
     key(true);
     sleep_ms(100);
     key(false);
+
+    board_init();
+
+    // init device stack on configured roothub port
+    const tusb_rhport_init_t rh_init = {
+      .role = TUSB_ROLE_DEVICE,
+      .speed = TUD_OPT_HIGH_SPEED ? TUSB_SPEED_HIGH : TUSB_SPEED_FULL
+    };
+    TU_ASSERT(tud_rhport_init(BOARD_TUD_RHPORT, &rh_init));
+    board_init_after_tusb();
 
     gpio_init(dit);
     gpio_set_dir(dit, GPIO_IN);
@@ -171,7 +218,8 @@ int main()
     gpio_set_dir(playPin, GPIO_IN);
     gpio_set_pulls(playPin, true, false);
 
-    while (true){
+    while (true) {
+        tud_task();
         // Read the state of the input pin
         dit_state = !gpio_get(dit);
         dah_state = !gpio_get(dah);
@@ -180,26 +228,27 @@ int main()
             next = 3;
         } else if (dit_state && !dah_state) {
             //uart_puts(uart0, "dit\n");
-            if (curent == dah || curent == -1){
+            if (curent == dah || curent == -1) {
                 next = dit;
             }
         } else if (dah_state && !dit_state) {
             //uart_puts(uart0, "dah\n");
 
-            if (curent == dit || curent == -1){
+            if (curent == dit || curent == -1) {
                 next = dah;
             }
         }
 
-        if(curent == -1){
-            if (next == dit){
+        if (curent == -1) {
+
+            if (next == dit) {
                 doDit();
                 next = -1;
-            } else if (next == dah){
+            } else if (next == dah) {
                 doDah();
                 next = -1;
-            } else if (next == 3){
-                if(last == dit){
+            } else if (next == 3) {
+                if (last == dit) {
                     doDah();
                 } else if (last == dah)
                 {
@@ -208,48 +257,107 @@ int main()
                 next = -1;
             }
         }
-        if(elements.size()>0 && to_ms_since_boot(get_absolute_time())-lastchar > basetime*2.8 && curent == -1){
+        if (to_ms_since_boot(get_absolute_time()) - lastchar > basetime * 7 && !hasSpace && curent == -1) {
+            uart_puts(uart0, " ");
+            hasSpace = true;
+            if (recordMode) {
+                recordArr.pop_back();
+                recordArr.push_back(space);
+            }
+        } else if (elements.size() > 0 && to_ms_since_boot(get_absolute_time()) - lastchar > basetime * 2.8 && curent == -1) {
             uart_puts(uart0, decodeChar(elements).c_str());
 
             elements.clear();
-        }
-        if (to_ms_since_boot(get_absolute_time())-lastchar > basetime*7 && !hasSpace && curent == -1){
-            uart_puts(uart0, " ");
-            hasSpace = true;
-
-        }
-        if(!gpio_get(playPin)){
-            contents = (const uint8_t *)(XIP_BASE + FLASH_TARGET_OFFSET);
-
-            
-            for(int i = 0; i < FLASH_PAGE_SIZE;i++){
-                if (contents[i] == end){
-                    hasSpace = false;
-                    break;
-                } else if(contents[i] == dit){
-                    key(true);
-                    sleep_ms(basetime);
-                    key(false);
-                    sleep_ms(basetime);
-                    elements.push_back(dit);
-                } else if(contents[i] == dah){
-                    key(true);
-                    sleep_ms(basetime*3);
-                    key(false);
-                    sleep_ms(basetime);
-                    elements.push_back(dah);
-                } else if(contents[i] == gap){
-                    uart_puts(uart0, decodeChar(elements).c_str());
-                    elements.clear();
-                    sleep_ms(basetime*3);
-                } else if(contents[i] == space){
-                    uart_puts(uart0, decodeChar(elements).c_str());
-                    elements.clear();
-                    uart_puts(uart0, " ");
-                    sleep_ms(basetime*7);
-                }
+            if (recordMode && recordArr.size() > 0) {
+                recordArr.push_back(gap);
             }
+        }
+
+        if (!gpio_get(playPin)) {
+            str = "A";
+            sendKey();
+
+            //     contents = (const uint8_t*)(XIP_BASE + FLASH_TARGET_OFFSET);
+
+
+            //     for (int i = 0; i < FLASH_PAGE_SIZE;i++) {
+            //         if (contents[i] == end) {
+            //             hasSpace = false;
+            //             break;
+            //         } else if (contents[i] == dit) {
+            //             key(true);
+            //             sleep_ms(basetime);
+            //             key(false);
+            //             sleep_ms(basetime);
+            //             elements.push_back(dit);
+            //         } else if (contents[i] == dah) {
+            //             key(true);
+            //             sleep_ms(basetime * 3);
+            //             key(false);
+            //             sleep_ms(basetime);
+            //             elements.push_back(dah);
+            //         } else if (contents[i] == gap) {
+            //             uart_puts(uart0, decodeChar(elements).c_str());
+            //             elements.clear();
+            //             sleep_ms(basetime * 3);
+            //         } else if (contents[i] == space) {
+            //             uart_puts(uart0, decodeChar(elements).c_str());
+            //             elements.clear();
+            //             uart_puts(uart0, " ");
+            //             sleep_ms(basetime * 7);
+            //         }
+            //     }
+            // }
+        }
+        if (gpio_get(recordPin)) {
+            recordLock = false;
+        }
+        if (!gpio_get(recordPin) && !recordMode && !recordLock) {
+            recordLock = true;
+            recordMode = true;
+            uart_puts(uart0, " start-- ");
+        } else if (!gpio_get(recordPin) && recordMode && !recordLock) {
+            recordLock = true;
+            recordMode = false;
+            uart_puts(uart0, " --stop ");
+            if (recordArr.size() != 0) {
+                recordArr.pop_back();
+                recordArr.push_back(end);
+
+                alignas(4) uint8_t write_buf[FLASH_PAGE_SIZE];
+                for (int i = 0; i < FLASH_PAGE_SIZE; i++) {
+                    write_buf[i] = 4;
+                }
+
+                for (int i = 0; i < recordArr.size(); i++) {
+                    write_buf[i] = recordArr.at(i);
+                }
+
+                saved_interrupts = save_and_disable_interrupts();
+                flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+                flash_range_program(FLASH_TARGET_OFFSET, write_buf, FLASH_PAGE_SIZE);
+                restore_interrupts(saved_interrupts);
+                recordArr.clear();
+
+
+            }
+        }
+        if (!lockout) {
+            tud_hid_keyboard_report(1, 0, NULL);
+            lockout = true;
 
         }
+
     }
+}
+
+
+
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen) {
+    return 0;
+}
+
+// Invoked when received SET_REPORT control request or
+// received data on OUT endpoint ( Report ID = 0, Type = 0 )
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize) {
 }
