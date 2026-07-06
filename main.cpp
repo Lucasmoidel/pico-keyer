@@ -1,6 +1,5 @@
 #include <iostream>
 #include "pico/stdlib.h"
-#include "hardware/i2c.h"
 #include "hardware/pio.h"
 #include "hardware/timer.h"
 #include "pico/time.h"
@@ -16,17 +15,10 @@
 
 #include "usb_descriptors.h"
 
-// I2C defines
-// This example will use I2C0 on GPIO8 (SDA) and GPIO9 (SCL) running at 400KHz.
-// Pins can be changed, see the GPIO function select table in the datasheet for information on GPIO astreamignments
-#define I2C_PORT i2c0
-#define I2C_SDA 8
-#define I2C_SCL 9
-
 #define FLASH_TARGET_OFFSET (2 * 1024 * 1024 - FLASH_SECTOR_SIZE)
+
 const uint8_t* contents;
 uint32_t saved_interrupts;
-
 
 int dit_state;
 int dah_state;
@@ -34,20 +26,25 @@ int dah_state;
 int last = -1;
 int curent = -1;
 int next = -1;
+
 int speed = 22;
 int tone = 430;
+
 int level = ((125000000 / 125) / tone) / 2;
 int basetime = 1200 / speed;
-//std::stringstream ss;
+
 std::string str;
+
 std::vector<int> elements;
-uint32_t lastchar = 0;
+uint32_t lastChar = 0;
+
 bool recordMode = false;
 std::vector<int> recordArr;
 bool hasSpace = true;
 bool recordLock = false;
-bool lockout = false;
-void sendKey();
+
+bool usbState = false;
+uint8_t keycode[6] = { 0 };
 
 std::string decodeChar(std::vector<int> elements) {
     std::stringstream stream;
@@ -71,30 +68,12 @@ std::string decodeChar(std::vector<int> elements) {
     }
     return "_";
 }
-
-int64_t sendKeyCB(alarm_id_t id, void* user_data) {
-    sendKey();
-    return 0;
-}
-
-void sendKey() {
-    // skip if hid is not ready yet
-    if (!tud_hid_ready()) {
-        add_alarm_in_ms(400, *sendKeyCB, NULL, false);
-        return;
+void sendKey(std::string s) {
+    if (tud_suspended()) {
+        tud_remote_wakeup();
     }
-
-    uint8_t keycode[6] = { 0 };
-    for (int i = 0; i < 36; i++) {
-        if (strs.at(i) == str) {
-            keycode[0] = i + 4;
-        }
-
-    }
-    tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
-    tud_hid_keyboard_report(1, 0, NULL);
-
-    lockout = false;
+    uint8_t conv_table[128][2] = { HID_ASCII_TO_KEYCODE };
+    keycode[0] = conv_table[(int)*s.c_str()][1];
 
 }
 
@@ -114,7 +93,7 @@ int64_t coolDown(alarm_id_t id, void* user_data) {
 int64_t turnOff(alarm_id_t id, void* user_data) {
     key(false);
     add_alarm_in_ms(basetime, *coolDown, user_data, false);
-    lastchar = to_ms_since_boot(get_absolute_time());
+    lastChar = to_ms_since_boot(get_absolute_time());
     elements.push_back(*((int*)user_data));
     if (recordMode) {
         recordArr.push_back(*((int*)user_data));
@@ -138,42 +117,8 @@ void doDah() {
     last = dah;
 }
 
-int main()
-{
+int main() {
     stdio_init_all();
-
-    // alignas(4) uint8_t write_buf[FLASH_PAGE_SIZE];
-    // std::vector<uint8_t> thingarr;
-    // std::string thingstr = "CQ POTA DE KO6LBA";
-    // int z = 0;
-    // for (int i = 0; i < thingstr.length(); i++){
-    //     if(z != 0 && (write_buf[z-1] == 0 || write_buf[z-1] == 1) && thingstr.substr(i, 1) != sp){
-    //         write_buf[z] = gap;
-    //         z++;
-    //     }
-    //     if(thingstr.substr(i, 1) == sp){
-    //             write_buf[z] = space;
-    //             z++;
-    //     } else {
-    //         for (int x = 0; x < strs.size(); x++){
-    //             if (thingstr.substr(i, 1) == strs.at(x)){
-    //                 for (int y = 0; y < chars.at(x).size(); y++){
-    //                     write_buf[z] = chars.at(x).at(y);
-    //                     z++;
-    //                 }
-    //             } 
-    //         } 
-    //     }
-
-    // }
-    // write_buf[z] = space;
-    // write_buf[z] = end;
-
-
-    // saved_interrupts = save_and_disable_interrupts();
-    // flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-    // flash_range_program(FLASH_TARGET_OFFSET, write_buf, FLASH_PAGE_SIZE);
-    // restore_interrupts(saved_interrupts);
     uart_init(uart0, 115200);
 
 
@@ -220,7 +165,6 @@ int main()
 
     while (true) {
         tud_task();
-        // Read the state of the input pin
         dit_state = !gpio_get(dit);
         dah_state = !gpio_get(dah);
         if (dah_state && dit_state) {
@@ -257,15 +201,18 @@ int main()
                 next = -1;
             }
         }
-        if (to_ms_since_boot(get_absolute_time()) - lastchar > basetime * 7 && !hasSpace && curent == -1) {
+        if (to_ms_since_boot(get_absolute_time()) - lastChar > basetime * 7 && !hasSpace && curent == -1) {
             uart_puts(uart0, " ");
+            sendKey(" ");
+
             hasSpace = true;
             if (recordMode) {
                 recordArr.pop_back();
                 recordArr.push_back(space);
             }
-        } else if (elements.size() > 0 && to_ms_since_boot(get_absolute_time()) - lastchar > basetime * 2.8 && curent == -1) {
+        } else if (elements.size() > 0 && to_ms_since_boot(get_absolute_time()) - lastChar > basetime * 2.8 && curent == -1) {
             uart_puts(uart0, decodeChar(elements).c_str());
+            sendKey(decodeChar(elements));
 
             elements.clear();
             if (recordMode && recordArr.size() > 0) {
@@ -274,41 +221,38 @@ int main()
         }
 
         if (!gpio_get(playPin)) {
-            str = "A";
-            sendKey();
-
-            //     contents = (const uint8_t*)(XIP_BASE + FLASH_TARGET_OFFSET);
+            contents = (const uint8_t*)(XIP_BASE + FLASH_TARGET_OFFSET);
 
 
-            //     for (int i = 0; i < FLASH_PAGE_SIZE;i++) {
-            //         if (contents[i] == end) {
-            //             hasSpace = false;
-            //             break;
-            //         } else if (contents[i] == dit) {
-            //             key(true);
-            //             sleep_ms(basetime);
-            //             key(false);
-            //             sleep_ms(basetime);
-            //             elements.push_back(dit);
-            //         } else if (contents[i] == dah) {
-            //             key(true);
-            //             sleep_ms(basetime * 3);
-            //             key(false);
-            //             sleep_ms(basetime);
-            //             elements.push_back(dah);
-            //         } else if (contents[i] == gap) {
-            //             uart_puts(uart0, decodeChar(elements).c_str());
-            //             elements.clear();
-            //             sleep_ms(basetime * 3);
-            //         } else if (contents[i] == space) {
-            //             uart_puts(uart0, decodeChar(elements).c_str());
-            //             elements.clear();
-            //             uart_puts(uart0, " ");
-            //             sleep_ms(basetime * 7);
-            //         }
-            //     }
-            // }
+            for (int i = 0; i < FLASH_PAGE_SIZE;i++) {
+                if (contents[i] == end) {
+                    hasSpace = false;
+                    break;
+                } else if (contents[i] == dit) {
+                    key(true);
+                    sleep_ms(basetime);
+                    key(false);
+                    sleep_ms(basetime);
+                    elements.push_back(dit);
+                } else if (contents[i] == dah) {
+                    key(true);
+                    sleep_ms(basetime * 3);
+                    key(false);
+                    sleep_ms(basetime);
+                    elements.push_back(dah);
+                } else if (contents[i] == gap) {
+                    uart_puts(uart0, decodeChar(elements).c_str());
+                    elements.clear();
+                    sleep_ms(basetime * 3);
+                } else if (contents[i] == space) {
+                    uart_puts(uart0, decodeChar(elements).c_str());
+                    elements.clear();
+                    uart_puts(uart0, " ");
+                    sleep_ms(basetime * 7);
+                }
+            }
         }
+
         if (gpio_get(recordPin)) {
             recordLock = false;
         }
@@ -338,21 +282,21 @@ int main()
                 flash_range_program(FLASH_TARGET_OFFSET, write_buf, FLASH_PAGE_SIZE);
                 restore_interrupts(saved_interrupts);
                 recordArr.clear();
-
-
             }
         }
-        if (!lockout) {
-            tud_hid_keyboard_report(1, 0, NULL);
-            lockout = true;
+        if (tud_hid_ready()) {
+            if (!usbState && keycode[0] > 0) {
+                tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
+                usbState = true;
+            } else if (usbState) {
 
+                keycode[0] = 0;
+                tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
+                usbState = false;
+            }
         }
-
     }
 }
-
-
-
 uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen) {
     return 0;
 }

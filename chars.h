@@ -51,7 +51,7 @@ std::vector<std::vector<int>> chars = {
     {dah, dah, dit, dit, dah, dah}, //,
     {dit, dah, dit, dah, dit, dah}, //.
     {dah, dit, dit, dah, dit}, //"/"
-    {dah, dit, dit, dit, dah, dit, dah} // <BK>
+    //{dah, dit, dit, dit, dah, dit, dah} // <BK>
 
 
 
@@ -98,5 +98,5 @@ std::vector<std::string> strs = {
     ",",
     ".",
     "/",
-    "<BK>"
+    //"<BK>"
 };
