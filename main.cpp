@@ -27,8 +27,8 @@ int last = -1;
 int curent = -1;
 int next = -1;
 
-int speed = 22;
-int tone = 430;
+int speed = 22t m mt m;
+int tone = 440;
 
 int level = ((125000000 / 125) / tone) / 2;
 int basetime = 1200 / speed;
@@ -42,10 +42,14 @@ bool recordMode = false;
 std::vector<int> recordArr;
 bool hasSpace = true;
 bool recordLock = false;
-
+#ifdef KEYBOARD_KEYER
 bool usbState = false;
 uint8_t keycode[6] = { 0 };
+#endif
 
+#ifdef MIDI_KEYER
+uint8_t msg[4];
+#endif
 std::string decodeChar(std::vector<int> elements) {
     std::stringstream stream;
     bool match = true;
@@ -68,6 +72,8 @@ std::string decodeChar(std::vector<int> elements) {
     }
     return "_";
 }
+
+#ifdef KEYBOARD_KEYER
 void sendKey(std::string s) {
     if (tud_suspended()) {
         tud_remote_wakeup();
@@ -76,13 +82,31 @@ void sendKey(std::string s) {
     keycode[0] = conv_table[(int)*s.c_str()][1];
 
 }
+#endif
 
 void key(bool x) {
     if (x) {
         pwm_set_gpio_level(pwm_pin, level);
+        #ifdef MIDI_KEYER
+        msg[0] = 0x09; // Note On - Channel 1
+        msg[1] = 0x90;   // Note Number
+        msg[2] = 1;
+        msg[3] = 0x7F;  // Velocity
+        tud_midi_n_stream_write(0, 0, msg, 4);
+        #endif
     } else {
         pwm_set_gpio_level(pwm_pin, 0);
+        #ifdef MIDI_KEYER
+        msg[0] = 0x08; // Note On - Channel 1
+        msg[1] = 0x80;   // Note Number
+        msg[2] = 1;
+        msg[3] = 0x0;  // Velocity
+        tud_midi_n_stream_write(0, 0, msg, 4);
+        #endif
     }
+    #ifdef MIDI_KEYER
+    tud_task();
+    #endif
 }
 
 int64_t coolDown(alarm_id_t id, void* user_data) {
@@ -98,6 +122,7 @@ int64_t turnOff(alarm_id_t id, void* user_data) {
     if (recordMode) {
         recordArr.push_back(*((int*)user_data));
     }
+
     return 0;
 }
 
@@ -137,6 +162,8 @@ int main() {
     key(false);
 
     board_init();
+    tusb_init();
+    #ifdef KEYBOARD_KEYER
 
     // init device stack on configured roothub port
     const tusb_rhport_init_t rh_init = {
@@ -144,8 +171,7 @@ int main() {
       .speed = TUD_OPT_HIGH_SPEED ? TUSB_SPEED_HIGH : TUSB_SPEED_FULL
     };
     TU_ASSERT(tud_rhport_init(BOARD_TUD_RHPORT, &rh_init));
-    board_init_after_tusb();
-
+    #endif
     gpio_init(dit);
     gpio_set_dir(dit, GPIO_IN);
     gpio_set_pulls(dit, true, false);
@@ -165,6 +191,7 @@ int main() {
 
     while (true) {
         tud_task();
+
         dit_state = !gpio_get(dit);
         dah_state = !gpio_get(dah);
         if (dah_state && dit_state) {
@@ -203,7 +230,9 @@ int main() {
         }
         if (to_ms_since_boot(get_absolute_time()) - lastChar > basetime * 7 && !hasSpace && curent == -1) {
             uart_puts(uart0, " ");
+            #ifdef KEYBOARD_KEYER
             sendKey(" ");
+            #endif
 
             hasSpace = true;
             if (recordMode) {
@@ -212,8 +241,9 @@ int main() {
             }
         } else if (elements.size() > 0 && to_ms_since_boot(get_absolute_time()) - lastChar > basetime * 2.8 && curent == -1) {
             uart_puts(uart0, decodeChar(elements).c_str());
+            #ifdef KEYBOARD_KEYER
             sendKey(decodeChar(elements));
-
+            #endif
             elements.clear();
             if (recordMode && recordArr.size() > 0) {
                 recordArr.push_back(gap);
@@ -284,6 +314,7 @@ int main() {
                 recordArr.clear();
             }
         }
+        #ifdef KEYBOARD_KEYER
         if (tud_hid_ready()) {
             if (!usbState && keycode[0] > 0) {
                 tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
@@ -295,13 +326,6 @@ int main() {
                 usbState = false;
             }
         }
+        #endif
     }
-}
-uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen) {
-    return 0;
-}
-
-// Invoked when received SET_REPORT control request or
-// received data on OUT endpoint ( Report ID = 0, Type = 0 )
-void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize) {
 }

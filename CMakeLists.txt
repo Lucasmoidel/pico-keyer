@@ -24,7 +24,7 @@ if (EXISTS ${picoVscode})
 endif()
 # ====================================================================================
 set(PICO_BOARD pico CACHE STRING "Board type")
-
+#option(KEYBOARD_KEYER "Enable keyboard" ON)
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 project(pico-keyer C CXX ASM)
@@ -65,5 +65,9 @@ target_link_libraries(pico-keyer
         tinyusb_board
         tinyusb_device
         )
+#target_compile_definitions(pico-keyer PRIVATE KEYBOARD_KEYER)
+target_compile_definitions(pico-keyer PRIVATE MIDI_KEYER)
+
+
 
 pico_add_extra_outputs(pico-keyer)
