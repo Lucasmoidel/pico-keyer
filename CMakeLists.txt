@@ -65,7 +65,7 @@ target_link_libraries(pico-keyer
         tinyusb_board
         tinyusb_device
         )
-#target_compile_definitions(pico-keyer PRIVATE KEYBOARD_KEYER)
+target_compile_definitions(pico-keyer PRIVATE KEYBOARD_KEYER)
 target_compile_definitions(pico-keyer PRIVATE MIDI_KEYER)
 
 

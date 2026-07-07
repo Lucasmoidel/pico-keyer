@@ -27,7 +27,7 @@ int last = -1;
 int curent = -1;
 int next = -1;
 
-int speed = 22t m mt m;
+int speed = 22;
 int tone = 440;
 
 int level = ((125000000 / 125) / tone) / 2;
