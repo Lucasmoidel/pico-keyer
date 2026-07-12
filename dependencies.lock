@@ -1,0 +1,35 @@
+dependencies:
+  espressif/cmake_utilities:
+    component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.1'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 0.5.3
+  espressif/pwm_audio:
+    component_hash: 01a391cd75fde699c7cc09bbd17673bbf6e31c3b357dec836709bd6af3af87ee
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.3'
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.1.2
+  idf:
+    source:
+      type: idf
+    version: 6.0.2
+direct_dependencies:
+- espressif/pwm_audio
+- idf
+manifest_hash: a2334c0eae1c7b9f16ddeb26359fa6f562b5ab38a8dd24cdd01bfded87679eaf
+target: esp32s3
+version: 3.0.0

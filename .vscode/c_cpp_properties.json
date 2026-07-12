@@ -1,22 +1,20 @@
 {
-    "configurations": [
-        {
-            "name": "Pico",
-            "includePath": [
-                "${workspaceFolder}/**",
-                "${userHome}/.pico-sdk/sdk/2.3.0/**"
-            ],
-            "forcedInclude": [
-                "${workspaceFolder}/build/generated/pico_base/pico/config_autogen.h",
-                "${userHome}/.pico-sdk/sdk/2.3.0/src/common/pico_base_headers/include/pico.h"
-            ],
-            "defines": [],
-            "compilerPath": "${userHome}/.pico-sdk/toolchain/15_2_Rel1/bin/arm-none-eabi-gcc",
-            "compileCommands": "${workspaceFolder}/build/compile_commands.json",
-            "cStandard": "c17",
-            "cppStandard": "c++14",
-            "intelliSenseMode": "linux-gcc-arm"
-        }
-    ],
-    "version": 4
+  "configurations": [
+    {
+      "name": "ESP-IDF",
+      "compilerPath": "/home/lucas/.espressif/tools/xtensa-esp-elf/esp-15.2.0_20251204/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc",
+      "compileCommands": "${config:idf.buildPath}/compile_commands.json",
+      "intelliSenseMode": "gcc-x86",
+      "includePath": [
+        "${workspaceFolder}/**"
+      ],
+      "browse": {
+        "path": [
+          "${workspaceFolder}"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ],
+  "version": 4
 }
