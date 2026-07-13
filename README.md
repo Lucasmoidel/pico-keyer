@@ -1,8 +1,8 @@
-https://github.com/user-attachments/assets/99ea52ba-c2dc-4420-b8ea-bca4e1ea46b1
+<img width="3000" height="4000" alt="IMG_20260713_032915769" src="https://github.com/user-attachments/assets/c1ff3bc6-d572-4ada-bd5a-208940869ab3" />
 <H1>Todo</H1>
 <ul>
-  <li> audio </li>
-  <li> usb HID </li>
+  <s><li> audio </li></s>
+  <s><li> usb HID </li></s>
   <li> adjustable speed </li>
   
   
