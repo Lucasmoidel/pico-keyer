@@ -13,6 +13,8 @@ gpio_num_t dahPin = (gpio_num_t)12;
 gpio_num_t pwmPin = (gpio_num_t)4;
 gpio_num_t recordPin = (gpio_num_t)47;
 gpio_num_t playPin = (gpio_num_t)36;
+gpio_num_t recLedPin = (gpio_num_t)21;
+
 
 std::string sp = " ";
 std::vector<std::vector<int>> chars = {
