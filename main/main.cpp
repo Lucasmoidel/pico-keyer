@@ -6,6 +6,7 @@
 
 #include "driver/gpio.h"
 #include "driver/ledc.h"
+#include "driver/uart.h"
 #include "esp_err.h"
 #include "sdkconfig.h"
 //#include "esp_pm.h"
@@ -15,27 +16,17 @@
 #include "esp_flash.h"
 #include "esp_partition.h"
 
+#include "tinyusb.h"
+#include "tinyusb_default_config.h"
+#include "class/hid/hid_device.h"
+
 #include "chars.h"
 #include "pwm.h"
 
 
-//#include "tinyusb_default_config.h"
-
-//#define FLASH_TARGET_OFFSET (2 * 1024 * 1024 - FLASH_SECTOR_SIZE)
-
-//const tinyusb_config_t tusb_cfg;
-
-const uint8_t* contents;
-uint32_t saved_interrupts;
-
-
 static const char* TAG = "RAW_FLASH";
 #define SECTOR_SIZE 4096
-const esp_partition_t* partition = esp_partition_find_first(
-    ESP_PARTITION_TYPE_DATA,
-    ESP_PARTITION_SUBTYPE_ANY,
-    "storage"
-);
+const esp_partition_t* partition;
 
 
 int dit_state;
@@ -62,10 +53,28 @@ bool recordLock = false;
 #ifdef KEYBOARD_KEYER
 bool usbState = false;
 uint8_t keycode[6] = { 0 };
+
+const uint8_t hid_report_descriptor[] = {
+    TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(HID_ITF_PROTOCOL_KEYBOARD)),
+    TUD_HID_REPORT_DESC_MOUSE(HID_REPORT_ID(HID_ITF_PROTOCOL_MOUSE))
+};
+
+const char* hid_string_descriptor[5] = { (char[]) { 0x09, 0x04 },"TinyUSB","TinyUSB Device","123456","Example HID interface", };
+
+static const uint8_t hid_configuration_descriptor[] = {
+    TUD_CONFIG_DESCRIPTOR(1, 1, 0, (TUD_CONFIG_DESC_LEN + CFG_TUD_HID * TUD_HID_DESC_LEN), TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 100),
+    TUD_HID_DESCRIPTOR(0, 4, false, sizeof(hid_report_descriptor), 0x81, 16, 10),
+};
+
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize) {}
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen) { return 0; }
+uint8_t const* tud_hid_descriptor_report_cb(uint8_t instance) { return hid_report_descriptor; }
 #endif
 
 esp_err_t err;
 
+int initTinyUSB();
+void setTimer(esp_timer_cb_t func, void* arg, uint64_t time);
 
 #ifdef MIDI_KEYER
 uint8_t msg[4];
@@ -135,17 +144,7 @@ void coolDown(void* arg) {
 
 void turnOff(void* arg) {
     key(false);
-    const esp_timer_create_args_t timer_args = {
-        .callback = &coolDown,
-        .arg = arg,
-        .dispatch_method = ESP_TIMER_TASK,
-        .name = "coolDown",
-        .skip_unhandled_events = false
-    };
-
-    esp_timer_handle_t timer_handle = NULL;
-    esp_timer_create(&timer_args, &timer_handle);
-    esp_timer_start_once(timer_handle, basetime * 1000);
+    setTimer(&coolDown, arg, basetime);
 
     lastChar = esp_timer_get_time() / 1000;
     elements.push_back(*((int*)arg));
@@ -157,17 +156,7 @@ void turnOff(void* arg) {
 
 void doDit() {
     key(true);
-    const esp_timer_create_args_t timer_args = {
-        .callback = &turnOff,
-        .arg = (void*)&dit,
-        .dispatch_method = ESP_TIMER_TASK,
-        .name = "dit",
-        .skip_unhandled_events = false
-    };
-
-    esp_timer_handle_t timer_handle = NULL;
-    esp_timer_create(&timer_args, &timer_handle);
-    esp_timer_start_once(timer_handle, basetime * 1000);
+    setTimer(&turnOff, (void*)&dit, basetime);
     hasSpace = false;
     curent = dit;
     last = dit;
@@ -175,23 +164,24 @@ void doDit() {
 
 void doDah() {
     key(true);
-    const esp_timer_create_args_t timer_args = {
-    .callback = &turnOff,
-    .arg = (void*)&dah,
-    .dispatch_method = ESP_TIMER_TASK,
-    .name = "dah",
-    .skip_unhandled_events = false
-    };
+    setTimer(&turnOff, (void*)&dah, basetime * 3);
 
-    esp_timer_handle_t timer_handle = NULL;
-    esp_timer_create(&timer_args, &timer_handle);
-    esp_timer_start_once(timer_handle, basetime * 1000 * 3);
     hasSpace = false;
     curent = dah;
     last = dah;
 }
 
 extern "C" void app_main() {
+
+    partition = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA,
+        ESP_PARTITION_SUBTYPE_ANY,
+        "storage"
+    );
+    if (partition == NULL) {
+        ESP_LOGE(TAG, "Partition 'storage' not found!");
+        return;
+    }
     initPWM(tone, pwmPin);
 
 
@@ -201,12 +191,7 @@ extern "C" void app_main() {
 
     #ifdef KEYBOARD_KEYER
 
-    // init device stack on configured roothub port
-    const tusb_rhport_init_t rh_init = {
-      .role = TUSB_ROLE_DEVICE,
-      .speed = TUD_OPT_HIGH_SPEED ? TUSB_SPEED_HIGH : TUSB_SPEED_FULL
-    };
-    TU_ASSERT(tud_rhport_init(BOARD_TUD_RHPORT, &rh_init));
+    initTinyUSB();
     #endif
 
     gpio_set_direction(ditPin, GPIO_MODE_INPUT);
@@ -260,7 +245,7 @@ extern "C" void app_main() {
                 next = -1;
             }
         }
-        if (esp_timer_get_time() / 100 - lastChar > basetime * 7 && !hasSpace && curent == -1) {
+        if (esp_timer_get_time() / 1000 - lastChar > basetime * 7 && !hasSpace && curent == -1) {
             printf(" ");
             #ifdef KEYBOARD_KEYER
             sendKey(" ");
@@ -271,7 +256,7 @@ extern "C" void app_main() {
                 recordArr.pop_back();
                 recordArr.push_back(space);
             }
-        } else if (elements.size() > 0 && esp_timer_get_time() / 100 - lastChar > basetime * 2.8 && curent == -1) {
+        } else if (elements.size() > 0 && esp_timer_get_time() / 1000 - lastChar > basetime * 2.8 && curent == -1) {
             printf(decodeChar(elements).c_str());
             #ifdef KEYBOARD_KEYER
             sendKey(decodeChar(elements));
@@ -283,39 +268,44 @@ extern "C" void app_main() {
         }
 
         if (!gpio_get_level(playPin)) {
-            //contents = (const uint8_t*)(XIP_BASE + FLASH_TARGET_OFFSET);
-            if (partition == NULL) {
-                ESP_LOGE(TAG, "Partition 'storage' not found!");
-                return;
-            }
+            printf("\n Playing memory: ");
+            fflush(stdout);
+            fsync(fileno(stdout));
+            uint8_t* readbuf = new uint8_t[SECTOR_SIZE];
+            esp_partition_read(partition, 0x0000, readbuf, SECTOR_SIZE);
 
-            for (int i = 0; i < FLASH_PAGE_SIZE;i++) {
-                if (contents[i] == end) {
+            for (int i = 0; i < SECTOR_SIZE - 1;i++) {
+                if (readbuf[i] == end) {
                     hasSpace = false;
                     break;
-                } else if (contents[i] == dit) {
+                } else if (readbuf[i] == dit) {
                     key(true);
-                    sleep_ms(basetime);
+                    vTaskDelay(pdMS_TO_TICKS(basetime));
                     key(false);
-                    sleep_ms(basetime);
+                    vTaskDelay(pdMS_TO_TICKS(basetime));
                     elements.push_back(dit);
-                } else if (contents[i] == dah) {
+                } else if (readbuf[i] == dah) {
                     key(true);
-                    sleep_ms(basetime * 3);
+                    vTaskDelay(pdMS_TO_TICKS(basetime * 3));
                     key(false);
-                    sleep_ms(basetime);
+                    vTaskDelay(pdMS_TO_TICKS(basetime));
                     elements.push_back(dah);
-                } else if (contents[i] == gap) {
+                } else if (readbuf[i] == gap) {
                     printf(decodeChar(elements).c_str());
                     elements.clear();
-                    sleep_ms(basetime * 3);
-                } else if (contents[i] == space) {
+                    vTaskDelay(pdMS_TO_TICKS(basetime * 3));
+                } else if (readbuf[i] == space) {
                     printf(decodeChar(elements).c_str());
                     elements.clear();
                     printf(" ");
-                    sleep_ms(basetime * 7);
+                    vTaskDelay(pdMS_TO_TICKS(basetime * 7));
+
                 }
+                fflush(stdout);
+                fsync(fileno(stdout));
             }
+            delete[] readbuf;
+            printf(" done\n");
         }
 
         if (gpio_get_level(recordPin)) {
@@ -324,56 +314,88 @@ extern "C" void app_main() {
         if (!gpio_get_level(recordPin) && !recordMode && !recordLock) {
             recordLock = true;
             recordMode = true;
-            printf(" start-- ");
+            printf("\n start-- ");
+            vTaskDelay(pdMS_TO_TICKS(500));
+
         } else if (!gpio_get_level(recordPin) && recordMode && !recordLock) {
             recordLock = true;
             recordMode = false;
-            printf(" --stop ");
+            printf(" --stop \n");
             if (recordArr.size() != 0) {
-                if (partition == NULL) {
-                    ESP_LOGE(TAG, "Partition 'storage' not found!");
-                    return;
-                }
 
                 recordArr.pop_back();
                 recordArr.push_back(end);
 
-                uint8_t write_buf[recordArr.size()];
-                for (int i = 0; i < recordArr.size(); i++) {
+
+                uint8_t* write_buf = new uint8_t[SECTOR_SIZE];
+                for (int i = 0; i < SECTOR_SIZE; i++) {
                     write_buf[i] = 4;
                 }
 
-                for (int i = 0; i < recordArr.size(); i++) {
+                for (int i = 0; i < recordArr.size() && i < SECTOR_SIZE - 1; i++) {
                     write_buf[i] = recordArr.at(i);
                 }
-
-                err = esp_partition_write(partition, 0x0000, write_buf, sizeof(write_buf));
+                esp_err_t err = esp_flash_erase_region(esp_flash_default_chip, partition->address, SECTOR_SIZE);
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "Erase failed: %s", esp_err_to_name(err));
+                    return;
+                }
+                err = esp_partition_write(partition, 0x0000, write_buf, SECTOR_SIZE);
                 if (err != ESP_OK) {
                     ESP_LOGE(TAG, "Write failed: %s", esp_err_to_name(err));
                     return;
                 }
                 recordArr.clear();
+                delete[] write_buf;
             }
         }
         #ifdef KEYBOARD_KEYER
         if (tud_hid_ready()) {
             if (!usbState && keycode[0] > 0) {
-                tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
+                tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
                 usbState = true;
             } else if (usbState) {
 
                 keycode[0] = 0;
-                tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, keycode);
+                tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
                 usbState = false;
             }
         }
         #endif
+        fflush(stdout);
+        fsync(fileno(stdout));
+
+
     }
 }
 
 
-// int initTinyUSB() {
-//     tusb_cfg = TINYUSB_DEFAULT_CONFIG();
-//     tinyusb_driver_install(&tusb_cfg);
-//     return true;
-// }
+int initTinyUSB() {
+    tinyusb_config_t tusb_cfg = TINYUSB_DEFAULT_CONFIG();
+
+    tusb_cfg.descriptor.device = NULL;
+    tusb_cfg.descriptor.full_speed_config = hid_configuration_descriptor;
+    tusb_cfg.descriptor.string = hid_string_descriptor;
+    tusb_cfg.descriptor.string_count = sizeof(hid_string_descriptor) / sizeof(hid_string_descriptor[0]);
+    #if (TUD_OPT_HIGH_SPEED)
+    tusb_cfg.descriptor.high_speed_config = hid_configuration_descriptor;
+    #endif // TUD_OPT_HIGH_SPEED
+
+    ESP_ERROR_CHECK(tinyusb_driver_install(&tusb_cfg));
+    ESP_LOGI(TAG, "USB initialization DONE");
+    return true;
+}
+
+void setTimer(esp_timer_cb_t func, void* arg, uint64_t time) {
+    const esp_timer_create_args_t timer_args = {
+        .callback = func,
+        .arg = arg,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "timer",
+        .skip_unhandled_events = false
+    };
+
+    esp_timer_handle_t timer_handle = NULL;
+    esp_timer_create(&timer_args, &timer_handle);
+    esp_timer_start_once(timer_handle, time * 1000);
+}
