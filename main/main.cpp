@@ -52,7 +52,6 @@ bool hasSpace = true;
 bool recordLock = false;
 #ifdef KEYBOARD_KEYER
 bool usbState = false;
-uint8_t keycode[6] = { 0 };
 
 const uint8_t hid_report_descriptor[] = {
     TUD_HID_REPORT_DESC_KEYBOARD(HID_REPORT_ID(HID_ITF_PROTOCOL_KEYBOARD)),
@@ -104,12 +103,22 @@ std::string decodeChar(std::vector<int> elements) {
 
 #ifdef KEYBOARD_KEYER
 void sendKey(std::string s) {
+    uint8_t keycode[6] = { 0 };
+
     if (tud_suspended()) {
         tud_remote_wakeup();
     }
-    uint8_t conv_table[128][2] = { HID_ASCII_TO_KEYCODE };
-    keycode[0] = conv_table[(int)*s.c_str()][1];
-
+    if (s == " ") {
+        keycode[0] = HID_KEY_SPACE;
+    } else {
+        uint8_t conv_table[128][2] = { HID_ASCII_TO_KEYCODE };
+        keycode[0] = conv_table[(int)*s.c_str()][1];
+    }
+    vTaskDelay(pdMS_TO_TICKS(10));
+    tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
+    keycode[0] = 0;
+    vTaskDelay(pdMS_TO_TICKS(10));
+    tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
 }
 #endif
 
@@ -268,7 +277,6 @@ extern "C" void app_main() {
         }
 
         if (!gpio_get_level(playPin)) {
-            printf("\n Playing memory: ");
             fflush(stdout);
             fsync(fileno(stdout));
             uint8_t* readbuf = new uint8_t[SECTOR_SIZE];
@@ -276,7 +284,7 @@ extern "C" void app_main() {
 
             for (int i = 0; i < SECTOR_SIZE - 1;i++) {
                 if (readbuf[i] == end) {
-                    hasSpace = false;
+                    //sendKey(decodeChar(elements));
                     break;
                 } else if (readbuf[i] == dit) {
                     key(true);
@@ -291,29 +299,36 @@ extern "C" void app_main() {
                     vTaskDelay(pdMS_TO_TICKS(basetime));
                     elements.push_back(dah);
                 } else if (readbuf[i] == gap) {
+                    lastChar = esp_timer_get_time() / 1000;
                     printf(decodeChar(elements).c_str());
                     #ifdef KEYBOARD_KEYER
                     sendKey(decodeChar(elements));
                     #endif
                     elements.clear();
-                    vTaskDelay(pdMS_TO_TICKS(basetime * 3));
+                    vTaskDelay(pdMS_TO_TICKS((basetime * 3) - (esp_timer_get_time() / 1000 - lastChar)));
                 } else if (readbuf[i] == space) {
+                    lastChar = esp_timer_get_time() / 1000;
                     printf(decodeChar(elements).c_str());
+                    printf(" ");
                     #ifdef KEYBOARD_KEYER
+                    sendKey(decodeChar(elements));
                     sendKey(" ");
                     #endif
                     elements.clear();
-                    printf(" ");
-                    vTaskDelay(pdMS_TO_TICKS(basetime * 7));
+                    vTaskDelay(pdMS_TO_TICKS((basetime * 7) - (esp_timer_get_time() / 1000 - lastChar)));
 
                 }
                 fflush(stdout);
                 fsync(fileno(stdout));
             }
             delete[] readbuf;
-            printf(" done\n");
-        }
+            fflush(stdout);
+            fsync(fileno(stdout));
+            vTaskDelay(pdMS_TO_TICKS(50));
+            hasSpace = false;
+            lastChar = esp_timer_get_time() / 1000;
 
+        }
         if (gpio_get_level(recordPin)) {
             recordLock = false;
         }
@@ -355,19 +370,6 @@ extern "C" void app_main() {
                 delete[] write_buf;
             }
         }
-        #ifdef KEYBOARD_KEYER
-        if (tud_hid_ready()) {
-            if (!usbState && keycode[0] > 0) {
-                tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
-                usbState = true;
-            } else if (usbState) {
-
-                keycode[0] = 0;
-                tud_hid_keyboard_report(HID_ITF_PROTOCOL_KEYBOARD, 0, keycode);
-                usbState = false;
-            }
-        }
-        #endif
         fflush(stdout);
         fsync(fileno(stdout));
 

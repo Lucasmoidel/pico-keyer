@@ -1,7 +1,7 @@
 {
   "C_Cpp.intelliSenseEngine": "default",
   "idf.extensionActivationMode": "always",
-  "idf.port": "/dev/ttyACM0",
+  "idf.port": "/dev/ttyACM1",
   "idf.currentSetup": "/home/lucas/.espressif/v6.0.2/esp-idf",
   "idf.flashType": "UART",
   "idf.customExtraVars": {}
