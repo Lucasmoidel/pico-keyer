@@ -292,10 +292,16 @@ extern "C" void app_main() {
                     elements.push_back(dah);
                 } else if (readbuf[i] == gap) {
                     printf(decodeChar(elements).c_str());
+                    #ifdef KEYBOARD_KEYER
+                    sendKey(decodeChar(elements));
+                    #endif
                     elements.clear();
                     vTaskDelay(pdMS_TO_TICKS(basetime * 3));
                 } else if (readbuf[i] == space) {
                     printf(decodeChar(elements).c_str());
+                    #ifdef KEYBOARD_KEYER
+                    sendKey(" ");
+                    #endif
                     elements.clear();
                     printf(" ");
                     vTaskDelay(pdMS_TO_TICKS(basetime * 7));
