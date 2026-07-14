@@ -47,6 +47,8 @@ std::vector<int> recordArr;
 bool hasSpace = true;
 bool recordLock = false;
 
+bool rotloc = false;
+
 esp_err_t err;
 
 int initTinyUSB();
@@ -190,6 +192,12 @@ extern "C" void app_main() {
 
     gpio_set_direction(playPin, GPIO_MODE_INPUT);
     gpio_set_pull_mode(playPin, GPIO_PULLUP_ONLY);
+
+    gpio_set_direction(rotA, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(rotA, GPIO_PULLUP_ONLY);
+
+    gpio_set_direction(rotB, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(rotB, GPIO_PULLUP_ONLY);
 
     gpio_set_direction(recLedPin, GPIO_MODE_OUTPUT);
     gpio_set_level(recLedPin, 0);
@@ -343,6 +351,26 @@ extern "C" void app_main() {
                 recordArr.clear();
                 delete[] write_buf;
             }
+        }
+
+        if (!gpio_get_level(rotA) && gpio_get_level(rotB) && !rotloc) {
+            rotloc = true;
+            speed += 1;
+            basetime = 1200 / speed;
+            printf("speed %d\n", speed);
+            vTaskDelay(pdMS_TO_TICKS(50));
+
+        }
+        if (gpio_get_level(rotA) && !gpio_get_level(rotB) && !rotloc) {
+            rotloc = true;
+            speed -= 1;
+            basetime = 1200 / speed;
+            printf("speed %d\n", speed);
+            vTaskDelay(pdMS_TO_TICKS(50));
+
+        }
+        if (rotloc && gpio_get_level(rotA) && gpio_get_level(rotB)) {
+            rotloc = false;
         }
         fflush(stdout);
         fsync(fileno(stdout));

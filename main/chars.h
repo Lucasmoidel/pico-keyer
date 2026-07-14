@@ -10,10 +10,15 @@ const uint end = 4;
 
 gpio_num_t ditPin = (gpio_num_t)11;
 gpio_num_t dahPin = (gpio_num_t)12;
+
 gpio_num_t pwmPin = (gpio_num_t)4;
+
 gpio_num_t recordPin = (gpio_num_t)47;
 gpio_num_t playPin = (gpio_num_t)36;
 gpio_num_t recLedPin = (gpio_num_t)21;
+
+gpio_num_t rotA = (gpio_num_t)41;
+gpio_num_t rotB = (gpio_num_t)42;
 
 
 std::string sp = " ";
